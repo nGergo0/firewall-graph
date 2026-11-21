@@ -1,4 +1,4 @@
-from parser import iter_continued_lines, iter_sections
+from parser import _iter_continued_lines, _iter_sections
 
 import pytest
 
@@ -34,7 +34,7 @@ import pytest
     ],
 )
 def test_iter_continued_lines(input, expected):
-    result = list(iter_continued_lines(input)) 
+    result = list(_iter_continued_lines(input)) 
     assert result == expected
 
 @pytest.mark.parametrize(
@@ -51,7 +51,7 @@ def test_iter_continued_lines(input, expected):
     ],
 )
 def test_iter_sections(input, expected):
-    result = list(iter_sections(input)) 
+    result = list(_iter_sections(input)) 
     assert result == expected
 
 
@@ -68,5 +68,5 @@ def test_iter_sections(input, expected):
     ],
 )
 def test_section_parsing(input, expected):
-    result = list(iter_sections([input, "line"]))
+    result = list(_iter_sections([input, "line"]))
     assert result[0][0] == expected
