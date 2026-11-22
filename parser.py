@@ -1,5 +1,5 @@
 
-from ipaddress import IPv4Network
+from ipaddress import IPv4Interface, IPv4Network
 from models import FirewallConfig, Rule, Condition, Action, PortRange 
 from collections.abc import Callable, Iterable, Iterator
 import re
@@ -23,10 +23,10 @@ def parse_config_from_file(filename: str) -> FirewallConfig:
     Reurns:
         Strucutred representaion of filter rules, interfaces, address and interface lists
     """
-    rules: list[Rule] = []
-    address_lists: defaultdict[str, set[IPv4Network]] = defaultdict(set)
+    rules:           list[Rule] = []
+    address_lists:   defaultdict[str, set[IPv4Network]] = defaultdict(set)
     interface_lists: dict[str, set[str]] = defaultdict(set)
-    interface_ips: dict[str, set[IPv4Network]] = defaultdict(set)
+    interface_ips:   dict[str, set[IPv4Interface]] = defaultdict(set)
     
     with open(filename, "r", encoding="utf-8") as f:
 
@@ -45,17 +45,27 @@ def parse_config_from_file(filename: str) -> FirewallConfig:
                     rule_id += 1
 
                 case "/ip/firewall/address-list":
-                    name, ip = _parse_address_list(params)
-                    address_lists[name].add(ip)
+                    if params.get("disabled") != "yes":
+                        alist = params["list"]
+                        address = params["address"]
+                        address_lists[alist].update(_parse_address(address))
                 
                 case "/interface/list":
-                    raise NotImplementedError
+                    if params.get("disabled") != "yes":
+                        iface_list = params["name"] 
+                        interface_lists.setdefault(iface_list, set())
+
                 case "/interface/list/member":
-                    raise NotImplementedError
+                    if params.get("disabled") != "yes":
+                        iface_list = params["list"]
+                        iface = params["interface"]
+                        interface_lists[iface_list].add(iface)
 
                 case "/ip/address":
-                    iface, ip = _parse_interface_ips(params)
-                    interface_ips[iface].add(ip)
+                    if params.get("disabled") != "yes":
+                        iface = params["interface"]
+                        address = IPv4Interface(params["address"])
+                        interface_ips[iface].add(address)
             
     return FirewallConfig(
         rules,
@@ -106,7 +116,7 @@ def _parse_portrange(val: str) -> frozenset[PortRange]:
         Supports combination of comma separated Ports and Port ranges. (Port number only.)
 
         Example
-        >>> _parse_address("22,25-27")
+        >>> _parse_portrange("22,25-27")
         frozenset({PortRange(22,22), PortRange(25,27)})
     """
 
@@ -158,14 +168,6 @@ def _parse_rule(rule_id: int, params: dict[str, str]) -> Rule:
         )
 
 
-def _parse_address_list(params: dict[str, str]) -> tuple[str, IPv4Network]:
-    raise NotImplementedError
-
-def _parse_interface_ips(params: dict[str, str]) -> tuple[str, IPv4Network]:
-    raise NotImplementedError
-
-
-
 def _iter_sections(lines: Iterable[str]) -> Iterator[tuple[str, str]]:
     """ Yield (section, line) pairs from Mikrotik configuration lines.
         
@@ -203,13 +205,13 @@ def _iter_continued_lines(lines: Iterable[str]) -> Iterator[str]:
 
     Example:
         >>> raw = [
-       ...     "add chain=input \\",
-       ...     "    protocol=tcp \\",
-       ...     "    action=accept",
-       ... ]
-       >>> for line in _iter_continued_lines(raw):
-           ...     print(line)
-       add chain=input protocol=tcp action=accept 
+        ...     "add chain=input \\",
+        ...     "    protocol=tcp \\",
+        ...     "    action=accept",
+        ... ]
+        >>> for line in _iter_continued_lines(raw):
+        ...     print(line)
+        add chain=input protocol=tcp action=accept 
     """
 
     buf: list[str] = []
@@ -233,10 +235,4 @@ def _iter_continued_lines(lines: Iterable[str]) -> Iterator[str]:
             
             # processing of the next command starts here
             buf.clear()
-
-         
-
-
-
-
 

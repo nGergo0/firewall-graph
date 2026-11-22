@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from ipaddress import IPv4Network, IPv6Network
+from ipaddress import IPv4Network, IPv6Network, IPv4Interface
 
 @dataclass(frozen=True)
 class Condition[T]:
@@ -84,6 +84,6 @@ class FirewallConfig:
     interface_lists: dict[str, frozenset[str]]
     
     # /ip/address
-    interface_ips: dict[str, frozenset[IPv4Network]]
+    interface_ips: dict[str, frozenset[IPv4Interface]]
 
 
