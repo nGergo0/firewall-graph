@@ -12,7 +12,7 @@ class Condition[T]:
 
 
 class Action(StrEnum):
-    # terminal cations
+    # terminal actions
     ACCEPT = auto()
     DROP = auto()
     REJECT = auto()
