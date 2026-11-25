@@ -1,6 +1,9 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from ipaddress import IPv4Network, IPv6Network, IPv4Interface
+from ipaddress import IPv4Address, IPv4Network, IPv6Network, IPv4Interface
+from typing import Callable, Any
+import operator
 
 @dataclass(frozen=True)
 class Condition[T]:
@@ -9,7 +12,10 @@ class Condition[T]:
     """
     value: T
     negated: bool = False
-
+    
+    def matches(self, actual: Any, comparator: Callable[[Any, T], bool] = operator.eq):
+        is_match = comparator(actual, self.value)
+        return not is_match if self.negated else is_match
 
 class Action(StrEnum):
     # terminal actions
@@ -67,10 +73,61 @@ class Rule:
     out_interface_list: Condition[str] | None = None
     # other conditions (if needed)
 
+    def matches(self, packet: Packet, in_interface: str | None, out_interface: str | None, config: FirewallConfig) -> bool:
+
+        def _check[T](actual: Any, condition: Condition[T] | None, comparator: Callable[[Any, T], bool] = operator.eq) -> bool: 
+            if condition is None:
+                return True
+            if actual is None:
+                return False
+            return condition.matches(actual, comparator)
+
+        if not _check(packet.protocol, self.protocol):
+            return False
+        if not _check(packet.src_address, self.src_address,      lambda ip, networks: any(ip in nw for nw in networks)):
+            return False
+        if not _check(packet.dst_address, self.dst_address,      lambda ip, networks: any(ip in nw for nw in networks)):
+            return False
+        
+        if not _check(packet.src_address, self.src_address_list, lambda ip, add_list: any(ip in nw for nw in config.address_lists.get(add_list, frozenset()))):
+            return False
+        if not _check(packet.dst_address, self.dst_address_list, lambda ip, add_list: any(ip in nw for nw in config.address_lists.get(add_list, frozenset()))):
+            return False
+       
+        
+        if self.port is not None:
+
+            src_match = _check(packet.src_port, self.port,      lambda port, p_ranges: any(port in p_range for p_range in p_ranges))
+            dst_match = _check(packet.dst_port, self.port,      lambda port, p_ranges: any(port in p_range for p_range in p_ranges))
+
+            port_matched = (src_match and dst_match) if self.port.negated else (src_match or dst_match)
+            if not port_matched:
+                return False
+
+        if not _check(packet.src_port, self.src_port,           lambda port, p_ranges: any(port in p_range for p_range in p_ranges)):
+            return False
+        if not _check(packet.dst_port, self.dst_port,           lambda port, p_ranges: any(port in p_range for p_range in p_ranges)):
+            return False
+
+        if not _check(in_interface, self.in_interface):
+            return False
+        if not _check(out_interface, self.out_interface):
+            return False
+        if not _check(in_interface, self.in_interface_list,     lambda iface, iface_list: iface in config.interface_lists.get(iface_list, frozenset())):
+            return False
+        if not _check(out_interface, self.out_interface_list,   lambda iface, iface_list: iface in config.interface_lists.get(iface_list, frozenset())):
+            return False
+
+        return True
+
+
 @dataclass(frozen=True)
 class Packet:
-    #TODO
-    pass
+    protocol: str
+    src_address: IPv4Address
+    dst_address: IPv4Address
+    src_port: int | None
+    dst_port: int | None
 
 @dataclass(frozen=True)
 class FirewallConfig:
